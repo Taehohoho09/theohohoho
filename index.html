@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ 급식실 오픈런! (3학년 편)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            background-color: #1a1a2e;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            width: 800px;
+            height: 450px;
+            background-color: #16213e;
+            border: 4px solid #0f3460;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* 선택 화면 */
+        #select-screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0f3460, #16213e);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            color: #e94560;
+            text-shadow: 2px 2px #000;
+        }
+        p.subtitle {
+            font-size: 14px;
+            color: #ccd6f6;
+            margin-bottom: 25px;
+        }
+        .class-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            width: 80%;
+            max-width: 500px;
+        }
+        .class-btn {
+            background-color: #0f3460;
+            color: #fff;
+            border: 2px solid #e94560;
+            padding: 12px 5px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .class-btn:hover {
+            background-color: #e94560;
+            transform: translateY(-3px);
+        }
+        .floor-tag {
+            font-size: 11px;
+            display: block;
+            color: #4ecca3;
+            margin-top: 3px;
+        }
+
+        /* 게임 화면 */
+        #game-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 18px;
+            font-weight: bold;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px #000;
+        }
+        .progress-bar-container {
+            width: 250px;
+            height: 20px;
+            background-color: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid #fff;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: #4ecca3;
+            transition: width 0.1s linear;
+        }
+
+        /* 게임 오버 / 승리 레이어 */
+        #result-screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+        }
+        #result-title {
+            font-size: 40px;
+            margin-bottom: 15px;
+        }
+        #result-desc {
+            font-size: 18px;
+            margin-bottom: 25px;
+            color: #ddd;
+        }
+        .restart-btn {
+            background-color: #e94560;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(233, 69, 96, 0.5);
+        }
+        .restart-btn:hover {
+            background-color: #ff6b81;
+        }
+        #controls-hint {
+            position: absolute;
+            bottom: 10px;
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- 1. 반 선택 화면 -->
+        <div id="select-screen">
+            <h1>🏃‍♂️ 급식실 오픈런!</h1>
+            <p class="subtitle">3학년 반을 선택하고 가장 빠르게 급식실에 도착하세요!</p>
+            <div class="class-grid" id="class-grid"></div>
+            <p id="controls-hint" style="margin-top: 20px;">💡 점프: 스페이스바 또는 화면 터치/클릭</p>
+        </div>
+
+        <!-- 2. UI 레이어 -->
+        <div id="ui-layer">
+            <div id="player-info">3학년 ?반</div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span>급식실까지:</span>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 게임 결과 화면 -->
+        <div id="result-screen">
+            <h2 id="result-title">성공!</h2>
+            <p id="result-desc">결과 설명</p>
+            <button class="restart-btn" onclick="resetGame()">다시 도전하기</button>
+        </div>
+
+        <!-- 4. 게임 캔버스 -->
+        <canvas id="game-canvas" width="800" height="450"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // 요소 참조
+        const selectScreen = document.getElementById('select-screen');
+        const resultScreen = document.getElementById('result-screen');
+        const classGrid = document.getElementById('class-grid');
+        const playerInfo = document.getElementById('player-info');
+        const progressBar = document.getElementById('progress-bar');
+        const resultTitle = document.getElementById('result-title');
+        const resultDesc = document.getElementById('result-desc');
+
+        // 게임 변수
+        let gameRunning = false;
+        let animationId;
+        let selectedClass = 0;
+        let selectedFloor = 0;
+        let totalDistance = 0; // 목표 거리 (층에 따라 달라짐)
+        let currentDistance = 0;
+        let speed = 6;
+        let frameCount = 0;
+
+        // 플레이어 객체
+        const player = {
+            x: 100,
+            y: 300,
+            width: 40,
+            height: 50,
+            velocityY: 0,
+            gravity: 0.8,
+            jumpPower: -14,
+            isJumping: false,
+            groundY: 300
+        };
+
+        // 장애물 배열
+        let obstacles = [];
+        const obstacleTypes = [
+            { name: '청소도구함', width: 35, height: 45, color: '#e2738c', emoji: '🧹' },
+            { name: '미끄럼주의', width: 30, height: 35, color: '#f8b400', emoji: '⚠️' },
+            { name: '선생님', width: 35, height: 55, color: '#2d68c4', emoji: '🧑‍🏫' }
+        ];
+
+        // 1. 반 선택 버튼 생성 (1~10반)
+        for (let i = 1; i <= 10; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'class-btn';
+            const floor = i <= 8 ? 2 : 3;
+            btn.innerHTML = `3-${i}반<span class="floor-tag">${floor}층</span>`;
+            btn.onclick = () => startGame(i, floor);
+            classGrid.appendChild(btn);
+        }
+
+        // 2. 게임 시작 함수
+        function startGame(classNum, floor) {
+            selectedClass = classNum;
+            selectedFloor = floor;
+            
+            // 층별 목표 거리 설정 (3층이 더 긺)
+            totalDistance = floor === 2 ? 1200 : 1600; 
+            currentDistance = 0;
+            
+            playerInfo.innerText = `3학년 ${classNum}반 (${floor}층 출발)`;
+            selectScreen.style.display = 'none';
+            resultScreen.style.display = 'none';
+            
+            // 데이터 초기화
+            obstacles = [];
+            player.y = player.groundY;
+            player.velocityY = 0;
+            player.isJumping = false;
+            frameCount = 0;
+            speed = 6;
+            
+            gameRunning = true;
+            gameLoop();
+        }
+
+        // 점프 이벤트 처리
+        function jump() {
+            if (!player.isJumping && gameRunning) {
+                player.velocityY = player.jumpPower;
+                player.isJumping = true;
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') jump();
+        });
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            jump();
+        });
+        canvas.addEventListener('mousedown', jump);
+
+        // 3. 게임 루프
+        function gameLoop() {
+            if (!gameRunning) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            frameCount++;
+
+            // 거리 진행 업데이트
+            currentDistance += speed * 0.3;
+            let progressPercent = Math.min((currentDistance / totalDistance) * 100, 100);
+            progressBar.style.width = `${progressPercent}%`;
+
+            // 배경 그리기 (복도 및 계단 시각화)
+            drawBackground();
+
+            // 플레이어 물리 업데이트
+            player.velocityY += player.gravity;
+            player.y += player.velocityY;
+
+            if (player.y >= player.groundY) {
+                player.y = player.groundY;
+                player.isJumping = false;
+            }
+
+            // 플레이어 그리기
+            drawPlayer();
+
+            // 장애물 생성 및 관리
+            if (frameCount % 90 === 0 && currentDistance < totalDistance - 200) {
+                spawnObstacle();
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.x -= speed;
+
+                // 장애물 그리기
+                drawObstacle(obs);
+
+                // 충돌 감지
+                if (checkCollision(player, obs)) {
+                    gameOver(false, "장애물에 걸려 넘어졌습니다! 맛있는 메뉴는 다른 반에게...");
+                    return;
+                }
+
+                // 화면 밖으로 나간 장애물 제거
+                if (obs.x + obs.width < 0) {
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // 도착 조건 확인
+            if (currentDistance >= totalDistance) {
+                gameOver(true, `축하합니다! 3학년 ${selectedClass}반이 1등으로 급식실에 도착해 돈가스를 쟁취했습니다! 🍽️`);
+                return;
+            }
+
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        // 배경 연출
+        function drawBackground() {
+            // 벽면
+            ctx.fillStyle = '#222831';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 바닥
+            ctx.fillStyle = '#393e46';
+            ctx.fillRect(0, player.groundY + player.height, canvas.width, canvas.height - (player.groundY + player.height));
+
+            // 바닥 선 (달리는 느낌)
+            ctx.strokeStyle = '#eee';
+            ctx.lineWidth = 2;
+            let lineOffset = (frameCount * speed) % 60;
+            for (let x = -lineOffset; x < canvas.width; x += 60) {
+                ctx.beginPath();
+                ctx.moveTo(x, player.groundY + player.height);
+                ctx.lineTo(x - 20, canvas.height);
+                ctx.stroke();
+            }
+
+            // 계단 구간 연출 (진행률 50% 지점쯤 계단 통과 효과)
+            let progress = currentDistance / totalDistance;
+            if (progress > 0.45 && progress < 0.55) {
+                ctx.fillStyle = 'rgba(233, 69, 96, 0.2)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 20px Malgun Gothic';
+                ctx.fillText("🚨 옆 건물 연결 계단 내려가는 중! 🚨", 260, 80);
+            }
+        }
+
+        // 플레이어 그려주기
+        function drawPlayer() {
+            // 캐릭터 몸통
+            ctx.fillStyle = '#4ecca3';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // 캐릭터 눈/얼굴
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(player.x + 25, player.y + 10, 10, 10);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(player.x + 30, player.y + 12, 4, 4);
+
+            // 달리는 다리 애니메이션
+            ctx.fillStyle = '#333';
+            if (!player.isJumping) {
+                let legOffset = Math.sin(frameCount * 0.3) * 10;
+                ctx.fillRect(player.x + 5, player.y + player.height, 8, 10 + legOffset);
+                ctx.fillRect(player.x + 25, player.y + player.height, 8, 10 - legOffset);
+            } else {
+                ctx.fillRect(player.x + 5, player.y + player.height, 10, 5);
+                ctx.fillRect(player.x + 20, player.y + player.height + 5, 10, 5);
+            }
+        }
+
+        // 장애물 생성
+        function spawnObstacle() {
+            let type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
+            obstacles.push({
+                x: canvas.width + 50,
+                y: player.groundY + player.height - type.height,
+                width: type.width,
+                height: type.height,
+                emoji: type.emoji,
+                color: type.color
+            });
+        }
+
+        // 장애물 그리기
+        function drawObstacle(obs) {
+            ctx.fillStyle = obs.color;
+            ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+            
+            // 이모지 텍스트
+            ctx.font = '24px sans-serif';
+            ctx.fillText(obs.emoji, obs.x + (obs.width / 2) - 12, obs.y + (obs.height / 2) + 8);
+        }
+
+        // AABB 충돌 감지
+        function checkCollision(rect1, rect2) {
+            return (
+                rect1.x < rect2.x + rect2.width &&
+                rect1.x + rect1.width > rect2.x &&
+                rect1.y < rect2.y + rect2.height &&
+                rect1.y + rect1.height > rect2.y
+            );
+        }
+
+        // 게임 종료 및 결과 처리
+        function gameOver(isWin, message) {
+            gameRunning = false;
+            cancelAnimationFrame(animationId);
+
+            resultScreen.style.display = 'flex';
+            if (isWin) {
+                resultTitle.innerText = "🎉 1등 도착 성공!";
+                resultTitle.style.color = "#4ecca3";
+            } else {
+                resultTitle.innerText = "💥 앗! 실패...";
+                resultTitle.style.color = "#e94560";
+            }
+            resultDesc.innerText = message;
+        }
+
+        // 게임 리셋 (처음 화면으로)
+        function resetGame() {
+            resultScreen.style.display = 'none';
+            selectScreen.style.display = 'flex';
+        }
+    </script>
+</body>
+</html>
